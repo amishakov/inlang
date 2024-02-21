@@ -1,5 +1,42 @@
 # @inlang/paraglide-js-adapter-sveltekit
 
+## 0.4.1
+
+### Patch Changes
+
+- @inlang/paraglide-js-adapter-vite@1.2.15
+
+## 0.4.0
+
+### Minor Changes
+
+- 45f5d8256: Message function can now be used as pathname translations
+
+## 0.3.7
+
+### Patch Changes
+
+- @inlang/paraglide-js-adapter-vite@1.2.14
+
+## 0.3.6
+
+### Patch Changes
+
+- @inlang/paraglide-js-adapter-vite@1.2.13
+
+## 0.3.5
+
+### Patch Changes
+
+- eaef718ee: Treeshake away `i18n.handle` on the client to reduce bundle size
+
+## 0.3.4
+
+### Patch Changes
+
+- 3aa1b6ca3: fix [#2717](https://github.com/opral/monorepo/issues/2171) - Link rewrite reactivity issue when navigating between pages
+  - @inlang/paraglide-js-adapter-vite@1.2.12
+
 ## 0.3.3
 
 ### Patch Changes

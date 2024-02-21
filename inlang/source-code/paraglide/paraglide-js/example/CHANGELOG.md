@@ -4,6 +4,26 @@
 
 ### Patch Changes
 
+- Updated dependencies [00f181ad3]
+  - @inlang/paraglide-js@1.2.5
+
+## null
+
+### Patch Changes
+
+- @inlang/paraglide-js@1.2.4
+
+## null
+
+### Patch Changes
+
+- Updated dependencies [4c26fa70a]
+  - @inlang/paraglide-js@1.2.3
+
+## null
+
+### Patch Changes
+
 - Updated dependencies [613ef9877]
   - @inlang/paraglide-js@1.2.2
 
