@@ -1,9 +1,15 @@
 import { createUnplugin } from "unplugin"
-import { Message, ProjectSettings, loadProject, type InlangProject } from "@inlang/sdk"
+import {
+	Message,
+	ProjectSettings,
+	loadProject,
+	type InlangProject,
+	normalizeMessage,
+} from "@inlang/sdk"
 import { openRepository, findRepoRoot } from "@lix-js/client"
 import path from "node:path"
 import fs from "node:fs/promises"
-import { compile, writeOutput, Logger } from "@inlang/paraglide-js/internal"
+import { compile, writeOutput, Logger, classifyProjectErrors } from "@inlang/paraglide-js/internal"
 import crypto from "node:crypto"
 
 const PLUGIN_NAME = "unplugin-paraglide"
@@ -33,23 +39,30 @@ export const paraglide = createUnplugin((config: UserConfig) => {
 	let numCompiles = 0
 	let previousMessagesHash: string | undefined = undefined
 
-	let messageModuleOutput: Record<string, string> = {}
+	let virtualModuleOutput: Record<string, string> = {}
 
 	async function triggerCompile(messages: readonly Message[], settings: ProjectSettings) {
 		const currentMessagesHash = hashMessages(messages ?? [], settings)
 		if (currentMessagesHash === previousMessagesHash) return
 
 		if (messages.length === 0) {
-			logger.warn(`No messages found - Skipping compilation into ${options.outdir}`)
+			logger.warn("No messages found - Skipping compilation")
 			return
 		}
 
 		logMessageChange()
-		const fsOutput = await compile({ messages, settings, outputStructure: "regular" })
-		messageModuleOutput = await compile({ messages, settings, outputStructure: "message-modules" })
+		previousMessagesHash = currentMessagesHash
+
+		const [regularOutput, messageModulesOutput] = await Promise.all([
+			compile({ messages, settings, outputStructure: "regular" }),
+			compile({ messages, settings, outputStructure: "message-modules" }),
+		])
+
+		virtualModuleOutput = messageModulesOutput
+		const fsOutput = regularOutput
+
 		await writeOutput(outputDirectory, fsOutput, fs)
 		numCompiles++
-		previousMessagesHash = currentMessagesHash
 	}
 
 	function logMessageChange() {
@@ -94,8 +107,26 @@ export const paraglide = createUnplugin((config: UserConfig) => {
 			async buildStart() {
 				const project = await getProject()
 
-				//Always fully compile once on build start
-				await triggerCompile(project.query.messages.getAll(), project.settings())
+				const initialMessages = project.query.messages.getAll()
+				const settings = project.settings()
+				await triggerCompile(initialMessages, settings)
+
+				project.errors.subscribe((errors) => {
+					if (errors.length === 0) return
+
+					const { fatalErrors, nonFatalErrors } = classifyProjectErrors(errors)
+					for (const error of nonFatalErrors) {
+						logger.warn(error.message)
+					}
+
+					for (const error of fatalErrors) {
+						if (error instanceof Error) {
+							logger.error(error.message) // hide the stack trace
+						} else {
+							logger.error(error)
+						}
+					}
+				})
 
 				let numInvocations = 0
 				project.query.messages.getAll.subscribe((messages) => {
@@ -144,7 +175,7 @@ export const paraglide = createUnplugin((config: UserConfig) => {
 					//if it starts with the outdir use the paraglideOutput virtual modules instead
 					if (id.startsWith(normalizedOutdir)) {
 						const internal = id.slice(normalizedOutdir.length)
-						const resolved = messageModuleOutput[internal]
+						const resolved = virtualModuleOutput[internal]
 						return resolved
 					}
 
@@ -155,11 +186,15 @@ export const paraglide = createUnplugin((config: UserConfig) => {
 	]
 })
 
-function hashMessages(messages: readonly Message[], settings: ProjectSettings): string {
+export function hashMessages(messages: readonly Message[], settings: ProjectSettings): string {
+	const normalizedMessages = messages
+		.map(normalizeMessage)
+		.sort((a, b) => a.id.localeCompare(b.id, "en"))
+
 	try {
 		const hash = crypto.createHash("sha256")
-		hash.update(JSON.stringify(messages) || "")
-		hash.update(JSON.stringify(settings) || "")
+		hash.update(JSON.stringify(normalizedMessages))
+		hash.update(JSON.stringify(settings))
 		return hash.digest("hex")
 	} catch (e) {
 		return crypto.randomUUID()
